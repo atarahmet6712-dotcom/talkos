@@ -1,5 +1,5 @@
 #!/bin/sh
-
+# TalkOS Build Config - Updated 15:18
 set -e
 
 lb config noauto \
