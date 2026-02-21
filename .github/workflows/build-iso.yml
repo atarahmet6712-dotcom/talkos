@@ -3,7 +3,7 @@ name: TalkOS ISO Build
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:   # Manuel başlatma butonu (Actions sekmesinden)
+  workflow_dispatch:
 
 jobs:
   build-iso:
@@ -19,21 +19,51 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq live-build debootstrap squashfs-tools xorriso curl gnupg
 
-      - name: Prepare auto scripts (make executable)
+      - name: Remove Ubuntu defaults from live-build
+        run: |
+          sudo rm -f /etc/live/build.conf
+          sudo mkdir -p /etc/live
+          sudo touch /etc/live/build.conf
+
+      - name: Prepare auto scripts
         run: |
           chmod +x talkos-build/auto/config
           chmod +x talkos-build/auto/build
           chmod +x talkos-build/auto/clean
 
-      - name: Run lb config (Debian Bookworm, amd64)
+      - name: Run lb config
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
           sudo lb config
 
+      - name: Fix Debian Bookworm security repo URL
+        working-directory: ${{ github.workspace }}/talkos-build
+        run: |
+          echo "[*] Fixing security repo URLs for Bookworm..."
+          # Fix any wrong security repo references in all config files
+          sudo find . -type f -name "*.conf" -o -name "*.list" -o -name "*.chroot" -o -name "*.binary" | while read f; do
+            sudo sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' "$f" 2>/dev/null || true
+          done
+          # Also fix the chroot sources if they exist
+          if [ -d chroot/etc/apt ]; then
+            sudo sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' chroot/etc/apt/sources.list 2>/dev/null || true
+          fi
+          # Create a hook that fixes sources.list at chroot time
+          sudo mkdir -p config/hooks/live
+          cat << 'HOOKEOF' | sudo tee config/hooks/live/0001-fix-security-repo.hook.chroot
+#!/bin/bash
+sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' /etc/apt/sources.list 2>/dev/null || true
+# Remove any broken security lines entirely if still causing issues
+sed -i '/security\.debian\.org.*bookworm\/updates/d' /etc/apt/sources.list 2>/dev/null || true
+apt-get update || true
+HOOKEOF
+          sudo chmod +x config/hooks/live/0001-fix-security-repo.hook.chroot
+          echo "[*] Security repo fix applied."
+
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
-          sudo lb build
+          sudo lb build 2>&1 | tail -100
         timeout-minutes: 60
 
       - name: Find and rename ISO
@@ -42,11 +72,9 @@ jobs:
           if [ -n "$ISO" ]; then
             sudo mv "$ISO" TalkOS-amd64-bookworm.iso
             ls -lh TalkOS-amd64-bookworm.iso
-            echo "ISO_FOUND=true" >> $GITHUB_ENV
           else
-            echo "ISO_FOUND=false" >> $GITHUB_ENV
             echo "ERROR: No ISO file found!"
-            ls talkos-build/
+            ls -la talkos-build/
             exit 1
           fi
 
