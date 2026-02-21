@@ -14,12 +14,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install live-build and dependencies
+      - name: Install latest live-build from Debian source
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq live-build debootstrap squashfs-tools xorriso curl gnupg
+          sudo apt-get install -y -qq debootstrap squashfs-tools xorriso curl gnupg git
+          sudo apt-get remove -y live-build 2>/dev/null || true
+          git clone --depth=1 https://salsa.debian.org/live-team/live-build.git /tmp/live-build
+          cd /tmp/live-build
+          sudo make install
 
-      - name: Remove Ubuntu defaults from live-build
+      - name: Remove Ubuntu defaults
         run: |
           sudo rm -f /etc/live/build.conf
           sudo mkdir -p /etc/live
@@ -35,17 +39,12 @@ jobs:
         working-directory: ${{ github.workspace }}/talkos-build
         run: sudo lb config
 
-      - name: Fix Debian Bookworm security repo URL
+      - name: Verify config
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
-          echo "[*] Fixing security repo URLs..."
-          sudo find . -type f \( -name "*.conf" -o -name "*.list" -o -name "*.chroot" -o -name "*.binary" \) -exec sudo sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' {} \; 2>/dev/null || true
-          sudo mkdir -p config/hooks/live
-          echo '#!/bin/bash' | sudo tee config/hooks/live/0001-fix-security.hook.chroot > /dev/null
-          echo 'sed -i "s|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g" /etc/apt/sources.list 2>/dev/null || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot > /dev/null
-          echo 'sed -i "/security\.debian\.org.*bookworm\/updates/d" /etc/apt/sources.list 2>/dev/null || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot > /dev/null
-          echo 'apt-get update || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot > /dev/null
-          sudo chmod +x config/hooks/live/0001-fix-security.hook.chroot
+          echo "=== Checking generated config ==="
+          grep -r "security" .build/config 2>/dev/null || echo "No security refs in .build/config"
+          echo "=== Done ==="
 
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
@@ -60,9 +59,7 @@ jobs:
             ls -lh TalkOS-amd64-bookworm.iso
           else
             echo "ERROR: No ISO file found!"
-            echo "--- Build directory contents ---"
             ls -laR talkos-build/.build/ 2>/dev/null || true
-            find talkos-build -name "*.log" -exec cat {} \; 2>/dev/null || true
             exit 1
           fi
 
