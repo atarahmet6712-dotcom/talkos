@@ -33,37 +33,24 @@ jobs:
 
       - name: Run lb config
         working-directory: ${{ github.workspace }}/talkos-build
-        run: |
-          sudo lb config
+        run: sudo lb config
 
       - name: Fix Debian Bookworm security repo URL
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
           echo "[*] Fixing security repo URLs for Bookworm..."
-          # Fix any wrong security repo references in all config files
-          sudo find . -type f -name "*.conf" -o -name "*.list" -o -name "*.chroot" -o -name "*.binary" | while read f; do
-            sudo sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' "$f" 2>/dev/null || true
-          done
-          # Also fix the chroot sources if they exist
-          if [ -d chroot/etc/apt ]; then
-            sudo sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' chroot/etc/apt/sources.list 2>/dev/null || true
-          fi
-          # Create a hook that fixes sources.list at chroot time
+          sudo find . -type f \( -name "*.conf" -o -name "*.list" -o -name "*.chroot" -o -name "*.binary" \) -exec sudo sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' {} \; 2>/dev/null || true
           sudo mkdir -p config/hooks/live
-          cat << 'HOOKEOF' | sudo tee config/hooks/live/0001-fix-security-repo.hook.chroot
-#!/bin/bash
-sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' /etc/apt/sources.list 2>/dev/null || true
-# Remove any broken security lines entirely if still causing issues
-sed -i '/security\.debian\.org.*bookworm\/updates/d' /etc/apt/sources.list 2>/dev/null || true
-apt-get update || true
-HOOKEOF
-          sudo chmod +x config/hooks/live/0001-fix-security-repo.hook.chroot
+          echo '#!/bin/bash' | sudo tee config/hooks/live/0001-fix-security.hook.chroot
+          echo 'sed -i "s|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g" /etc/apt/sources.list 2>/dev/null || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot
+          echo 'sed -i "/security\.debian\.org.*bookworm\/updates/d" /etc/apt/sources.list 2>/dev/null || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot
+          echo 'apt-get update || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot
+          sudo chmod +x config/hooks/live/0001-fix-security.hook.chroot
           echo "[*] Security repo fix applied."
 
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
-        run: |
-          sudo lb build 2>&1 | tail -100
+        run: sudo lb build 2>&1 | tail -100
         timeout-minutes: 60
 
       - name: Find and rename ISO
