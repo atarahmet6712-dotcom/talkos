@@ -23,6 +23,30 @@ jobs:
             debootstrap squashfs-tools xorriso curl gnupg git gettext \
             debian-archive-keyring debian-keyring cpio
 
+      - name: Setup Debian archive keyring for Bookworm
+        run: |
+          # Ubuntu'nun debian-archive-keyring paketi Bookworm anahtarlarını içermeyebilir.
+          # Debian'dan en güncel keyring paketini indirip kuruyoruz.
+          KEYRING_URL="http://deb.debian.org/debian/pool/main/d/debian-archive-keyring/"
+          # En güncel deb dosyasının adını bul
+          KEYRING_DEB=$(curl -sL "$KEYRING_URL" | grep -oP 'debian-archive-keyring_[^"]+_all\.deb' | sort -V | tail -1)
+          if [ -z "$KEYRING_DEB" ]; then
+            echo "::warning::Could not find latest keyring, using fallback"
+            KEYRING_DEB="debian-archive-keyring_2023.4_all.deb"
+          fi
+          echo "Downloading: ${KEYRING_URL}${KEYRING_DEB}"
+          curl -sL -o /tmp/debian-archive-keyring.deb "${KEYRING_URL}${KEYRING_DEB}"
+          sudo dpkg -i /tmp/debian-archive-keyring.deb || sudo apt-get install -f -y
+          
+          # Keyring dosyasının varlığını doğrula
+          if [ ! -f /usr/share/keyrings/debian-archive-keyring.gpg ]; then
+            echo "::error::debian-archive-keyring.gpg hala bulunamadı!"
+            ls -la /usr/share/keyrings/ || true
+            exit 1
+          fi
+          echo "✅ Debian archive keyring başarıyla kuruldu:"
+          ls -la /usr/share/keyrings/debian-archive-keyring.gpg
+
       - name: Install latest live-build from Debian source
         run: |
           # Mevcut sürümü temizle ve en güncelini kur
