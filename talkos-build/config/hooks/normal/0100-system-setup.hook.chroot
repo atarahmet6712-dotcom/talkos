@@ -1,63 +1,28 @@
 #!/bin/bash
 set -e
 
-echo "[*] Running System Setup Hook for TalkOS"
+echo "[*] TalkOS System Setup"
 
-export DEBIAN_FRONTEND=noninteractive
-
-# Install VS Code Microsoft Repo manually here if you want:
-# Or just rely on standard debian packages. For now we just add standard stuff.
-# Let's add VS Code repo via curl
-apt-get install -y gnupg curl
-curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/microsoft.gpg
-echo "deb [arch=amd64] https://packages.microsoft.com/repos/vscode stable main" > /etc/apt/sources.list.d/vscode.list
-
-apt-get update
-apt-get install -y code
-
-# Services
-systemctl enable NetworkManager
-
-# LightDM Setup
-if [ -x "/usr/sbin/lightdm" ]; then
-    systemctl enable lightdm
-fi
-
-# UFW Defaults
-if command -v ufw > /dev/null; then
-    ufw default deny incoming
-    ufw default allow outgoing
-    ufw allow ssh
-    systemctl disable ufw # Calamares enables ufw at the end of installation, live USB does not need strict rules. Or you can enable it.
-fi
-
-# Locale Setup for tr_TR
+# Locale
 if [ -f /etc/locale.gen ]; then
     sed -i 's/# tr_TR.UTF-8 UTF-8/tr_TR.UTF-8 UTF-8/g' /etc/locale.gen
-    sed -i 's/# tr_TR ISO-8859-9/tr_TR ISO-8859-9/g' /etc/locale.gen
     locale-gen
     update-locale LANG=tr_TR.UTF-8
 fi
 
-# Timezone (Istanbul)
+# Timezone
 ln -sf /usr/share/zoneinfo/Europe/Istanbul /etc/localtime
 
-# Enable sudo for sudo group without password (developer friendly)
+# Services
+systemctl enable NetworkManager || true
+systemctl enable lightdm || true
+
+# Sudo
 echo "%sudo   ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/talkos-sudo
 chmod 0440 /etc/sudoers.d/talkos-sudo
 
-# Make custom apps executable
-if [ -f /usr/local/bin/talkos-calculator ]; then
-    chmod +x /usr/local/bin/talkos-calculator
-fi
-if [ -f /usr/local/bin/talkos-store ]; then
-    chmod +x /usr/local/bin/talkos-store
-fi
+# Custom apps
+chmod +x /usr/local/bin/talkos-calculator 2>/dev/null || true
+chmod +x /usr/local/bin/talkos-store 2>/dev/null || true
 
-# Plymouth Configuration (if installed)
-if command -v plymouth-set-default-theme > /dev/null; then
-    # Usually you would have your own theme, for now we set a default one
-    plymouth-set-default-theme -R bgrt || true
-fi
-
-echo "[*] System Setup Hook completed."
+echo "[*] System Setup completed."

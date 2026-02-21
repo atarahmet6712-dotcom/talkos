@@ -38,19 +38,18 @@ jobs:
       - name: Fix Debian Bookworm security repo URL
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
-          echo "[*] Fixing security repo URLs for Bookworm..."
+          echo "[*] Fixing security repo URLs..."
           sudo find . -type f \( -name "*.conf" -o -name "*.list" -o -name "*.chroot" -o -name "*.binary" \) -exec sudo sed -i 's|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g' {} \; 2>/dev/null || true
           sudo mkdir -p config/hooks/live
-          echo '#!/bin/bash' | sudo tee config/hooks/live/0001-fix-security.hook.chroot
-          echo 'sed -i "s|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g" /etc/apt/sources.list 2>/dev/null || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot
-          echo 'sed -i "/security\.debian\.org.*bookworm\/updates/d" /etc/apt/sources.list 2>/dev/null || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot
-          echo 'apt-get update || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot
+          echo '#!/bin/bash' | sudo tee config/hooks/live/0001-fix-security.hook.chroot > /dev/null
+          echo 'sed -i "s|security.debian.org bookworm/updates|security.debian.org/debian-security bookworm-security|g" /etc/apt/sources.list 2>/dev/null || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot > /dev/null
+          echo 'sed -i "/security\.debian\.org.*bookworm\/updates/d" /etc/apt/sources.list 2>/dev/null || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot > /dev/null
+          echo 'apt-get update || true' | sudo tee -a config/hooks/live/0001-fix-security.hook.chroot > /dev/null
           sudo chmod +x config/hooks/live/0001-fix-security.hook.chroot
-          echo "[*] Security repo fix applied."
 
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
-        run: sudo lb build 2>&1 | tail -100
+        run: sudo lb build
         timeout-minutes: 60
 
       - name: Find and rename ISO
@@ -61,7 +60,9 @@ jobs:
             ls -lh TalkOS-amd64-bookworm.iso
           else
             echo "ERROR: No ISO file found!"
-            ls -la talkos-build/
+            echo "--- Build directory contents ---"
+            ls -laR talkos-build/.build/ 2>/dev/null || true
+            find talkos-build -name "*.log" -exec cat {} \; 2>/dev/null || true
             exit 1
           fi
 
