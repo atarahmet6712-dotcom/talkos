@@ -25,10 +25,11 @@ jobs:
           chmod +x talkos-build/auto/build
           chmod +x talkos-build/auto/clean
 
-      - name: Run lb config (Debian Bookworm, amd64)
+      - name: Run lb config (Debian Bookworm, amd64, ignore defaults)
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
           sudo lb config \
+            --no-defaults \
             --distribution bookworm \
             --architecture amd64 \
             --mode debian \
