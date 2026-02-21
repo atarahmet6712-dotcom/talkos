@@ -3,12 +3,12 @@ name: TalkOS ISO Build
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:   # Manuel başlatma butonu
+  workflow_dispatch:   # Manuel başlatma butonu (Actions sekmesinden)
 
 jobs:
   build-iso:
     name: Build TalkOS ISO
-    runs-on: ubuntu-22.04  # GitHub bulut Linux sunucusu
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout Repository
@@ -19,25 +19,52 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq live-build debootstrap squashfs-tools xorriso curl gnupg
 
-      - name: Run TalkOS Build
+      - name: Prepare auto scripts (make executable)
         run: |
-          cd talkos-build
-          sudo chmod +x ../auto/config ../auto/build ../auto/clean 2>/dev/null || true
-          sudo lb config
-          sudo lb build
-        working-directory: ${{ github.workspace }}
+          chmod +x talkos-build/auto/config
+          chmod +x talkos-build/auto/build
+          chmod +x talkos-build/auto/clean
 
-      - name: Move ISO and rename
+      - name: Run lb config (Debian Bookworm, amd64)
+        working-directory: ${{ github.workspace }}/talkos-build
         run: |
-          ISO=$(find talkos-build -name "*.hybrid.iso" 2>/dev/null | head -1)
-          if [ -z "$ISO" ]; then
-            ISO=$(find talkos-build -name "*.iso" 2>/dev/null | head -1)
-          fi
+          sudo lb config \
+            --distribution bookworm \
+            --architecture amd64 \
+            --mode debian \
+            --system live \
+            --iso-application "TalkOS Live System" \
+            --iso-publisher "TalkOS Project" \
+            --iso-volume "TalkOS-amd64" \
+            --archive-areas "main contrib non-free non-free-firmware" \
+            --mirror-bootstrap "http://deb.debian.org/debian/" \
+            --mirror-chroot "http://deb.debian.org/debian/" \
+            --mirror-binary "http://deb.debian.org/debian/" \
+            --updates true \
+            --security true \
+            --apt-indices false \
+            --apt-recommends false \
+            --firmware-chroot true \
+            --firmware-binary true \
+            --bootappend-live "boot=live components locales=tr_TR.UTF-8 keyboard-layouts=tr splash quiet"
+
+      - name: Run lb build
+        working-directory: ${{ github.workspace }}/talkos-build
+        run: |
+          sudo lb build
+        timeout-minutes: 60
+
+      - name: Find and rename ISO
+        run: |
+          ISO=$(find talkos-build -name "*.iso" 2>/dev/null | head -1)
           if [ -n "$ISO" ]; then
             sudo mv "$ISO" TalkOS-amd64-bookworm.iso
-            echo "ISO found and renamed: TalkOS-amd64-bookworm.iso"
+            ls -lh TalkOS-amd64-bookworm.iso
+            echo "ISO_FOUND=true" >> $GITHUB_ENV
           else
-            echo "ERROR: ISO not found!"
+            echo "ISO_FOUND=false" >> $GITHUB_ENV
+            echo "ERROR: No ISO file found!"
+            ls talkos-build/
             exit 1
           fi
 
