@@ -37,14 +37,10 @@ jobs:
 
       - name: Run lb config
         working-directory: ${{ github.workspace }}/talkos-build
-        run: sudo lb config
-
-      - name: Verify config
-        working-directory: ${{ github.workspace }}/talkos-build
         run: |
-          echo "=== Checking generated config ==="
-          grep -r "security" .build/config 2>/dev/null || echo "No security refs in .build/config"
-          echo "=== Done ==="
+          sudo lb config
+          echo "=== Security settings in config ==="
+          grep -i "security" .build/config 2>/dev/null || echo "No security refs found (GOOD!)"
 
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
