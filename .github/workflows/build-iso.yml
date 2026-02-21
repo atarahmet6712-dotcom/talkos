@@ -25,29 +25,10 @@ jobs:
           chmod +x talkos-build/auto/build
           chmod +x talkos-build/auto/clean
 
-      - name: Run lb config (Debian Bookworm, amd64, ignore defaults)
+      - name: Run lb config (Debian Bookworm, amd64)
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
-          sudo lb config \
-            --no-defaults \
-            --distribution bookworm \
-            --architecture amd64 \
-            --mode debian \
-            --system live \
-            --iso-application "TalkOS Live System" \
-            --iso-publisher "TalkOS Project" \
-            --iso-volume "TalkOS-amd64" \
-            --archive-areas "main contrib non-free non-free-firmware" \
-            --mirror-bootstrap "http://deb.debian.org/debian/" \
-            --mirror-chroot "http://deb.debian.org/debian/" \
-            --mirror-binary "http://deb.debian.org/debian/" \
-            --updates true \
-            --security true \
-            --apt-indices false \
-            --apt-recommends false \
-            --firmware-chroot true \
-            --firmware-binary true \
-            --bootappend-live "boot=live components locales=tr_TR.UTF-8 keyboard-layouts=tr splash quiet"
+          sudo lb config
 
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
