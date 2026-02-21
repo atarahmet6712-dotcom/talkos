@@ -14,14 +14,17 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install latest live-build from Debian source
+      - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq debootstrap squashfs-tools xorriso curl gnupg git
+          sudo apt-get install -y -qq debootstrap squashfs-tools xorriso curl gnupg git gettext
+
+      - name: Install latest live-build from Debian source
+        run: |
           sudo apt-get remove -y live-build 2>/dev/null || true
           git clone --depth=1 https://salsa.debian.org/live-team/live-build.git /tmp/live-build
           cd /tmp/live-build
-          sudo make install
+          sudo make install || true
 
       - name: Remove Ubuntu defaults
         run: |
@@ -37,10 +40,7 @@ jobs:
 
       - name: Run lb config
         working-directory: ${{ github.workspace }}/talkos-build
-        run: |
-          sudo lb config
-          echo "=== Security settings in config ==="
-          grep -i "security" .build/config 2>/dev/null || echo "No security refs found (GOOD!)"
+        run: sudo lb config
 
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
@@ -48,18 +48,20 @@ jobs:
         timeout-minutes: 60
 
       - name: Find and rename ISO
+        if: always()
         run: |
           ISO=$(find talkos-build -name "*.iso" 2>/dev/null | head -1)
           if [ -n "$ISO" ]; then
             sudo mv "$ISO" TalkOS-amd64-bookworm.iso
-            ls -lh TalkOS-amd64-bookworm.iso
+            echo "ISO_DONE=true" >> $GITHUB_ENV
           else
-            echo "ERROR: No ISO file found!"
-            ls -laR talkos-build/.build/ 2>/dev/null || true
+            echo "ERROR: ISO not found!"
+            find talkos-build -name "*.log" -exec tail -n 50 {} \; || true
             exit 1
           fi
 
       - name: Upload ISO as Artifact
+        if: env.ISO_DONE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: TalkOS-ISO
