@@ -1,17 +1,22 @@
 #!/bin/sh
-# TalkOS Build Config - Updated 16:03
+# TalkOS Build Config - Optimized for Bookworm
 set -e
 
 lb config noauto \
     --mode debian \
     --distribution bookworm \
     --architecture amd64 \
+    --linux-flavours amd64 \
     --archive-areas "main contrib non-free non-free-firmware" \
     --mirror-bootstrap "http://deb.debian.org/debian/" \
     --mirror-binary "http://deb.debian.org/debian/" \
-    --security false \
+    --security true \
+    --updates true \
+    --backports true \
     --iso-application "TalkOS" \
     --iso-publisher "TalkOS Project" \
     --iso-volume "TalkOS-amd64" \
-    --bootappend-live "boot=live components locales=tr_TR.UTF-8 keyboard-layouts=tr splash quiet" \
+    --apt-recommends false \
+    --debootstrap-options "--include=debian-archive-keyring" \
+    --bootappend-live "boot=live components locales=tr_TR.UTF-8 keyboard-layouts=tr keyboard-variants=, splash quiet ---" \
     "${@}"

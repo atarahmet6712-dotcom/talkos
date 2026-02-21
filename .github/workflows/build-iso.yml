@@ -9,7 +9,8 @@ jobs:
   build-iso:
     name: Build TalkOS ISO
     runs-on: ubuntu-22.04
-
+    # live-build işlemleri yoğun CPU ve I/O gerektirir.
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -17,46 +18,53 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq debootstrap squashfs-tools xorriso curl gnupg git gettext
+          # 'live-build' paketini repodan kurmak yerine manuel kuracağız ama bağımlılıkları eksiksiz alalım
+          sudo apt-get install -y -qq \
+            debootstrap squashfs-tools xorriso curl gnupg git gettext \
+            debian-archive-keyring debian-keyring cpio
 
       - name: Install latest live-build from Debian source
         run: |
-          sudo apt-get remove -y live-build 2>/dev/null || true
+          # Mevcut sürümü temizle ve en güncelini kur
+          sudo apt-get remove -y live-build || true
           git clone --depth=1 https://salsa.debian.org/live-team/live-build.git /tmp/live-build
           cd /tmp/live-build
-          sudo make install || true
-
-      - name: Remove Ubuntu defaults
-        run: |
-          sudo rm -f /etc/live/build.conf
-          sudo mkdir -p /etc/live
-          sudo touch /etc/live/build.conf
+          sudo make install
 
       - name: Prepare auto scripts
         run: |
-          chmod +x talkos-build/auto/config
-          chmod +x talkos-build/auto/build
-          chmod +x talkos-build/auto/clean
+          # Scripts klasörünün varlığını kontrol et ve izinleri ver
+          if [ -d "talkos-build/auto" ]; then
+            chmod +x talkos-build/auto/*
+          fi
 
       - name: Run lb config
         working-directory: ${{ github.workspace }}/talkos-build
-        run: sudo lb config
+        run: |
+          # Ubuntu üzerinde Debian derlerken debootstrap'ın Debian anahtarlarına ihtiyacı olur
+          # Ayrıca temiz bir başlangıç için 'lb clean' ekliyoruz
+          sudo lb clean --all
+          sudo lb config
 
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
-        run: sudo lb build
-        timeout-minutes: 60
+        run: |
+          # lb build komutu hata alsa bile logları görmek için 'always' yerine burada hata kontrolü yapıyoruz
+          sudo lb build
+        timeout-minutes: 90 # 60 dakika bazen yetmeyebilir, 90'a çıkardım
 
       - name: Find and rename ISO
         if: always()
         run: |
-          ISO=$(find talkos-build -name "*.iso" 2>/dev/null | head -1)
+          # ISO dosyasını ararken talkos-build klasörünün içine bakıyoruz
+          ISO=$(find talkos-build -maxdepth 1 -name "*.iso" 2>/dev/null | head -1)
           if [ -n "$ISO" ]; then
             sudo mv "$ISO" TalkOS-amd64-bookworm.iso
             echo "ISO_DONE=true" >> $GITHUB_ENV
           else
-            echo "ERROR: ISO not found!"
-            find talkos-build -name "*.log" -exec tail -n 50 {} \; || true
+            echo "::error::ISO dosyası üretilemedi! Loglar kontrol ediliyor..."
+            # Hata varsa son 100 satırı yazdır
+            [ -f talkos-build/build.log ] && tail -n 100 talkos-build/build.log || true
             exit 1
           fi
 
@@ -67,3 +75,5 @@ jobs:
           name: TalkOS-ISO
           path: TalkOS-amd64-bookworm.iso
           retention-days: 7
+          # Sıkıştırma yaparak yükleme hızını artırır
+          compression-level: 0
