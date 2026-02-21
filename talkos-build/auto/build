@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# live-build build script
+set -e
+
+lb build noauto "${@}"

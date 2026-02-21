@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# live-build config script
+set -e
+
+lb config noauto \
+    --distribution bookworm \
+    --architecture amd64 \
+    --mode debian \
+    --system live \
+    --iso-application "TalkOS Live System" \
+    --iso-publisher "TalkOS Project" \
+    --iso-volume "TalkOS-amd64" \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --updates true \
+    --security true \
+    --apt-indices false \
+    --apt-recommends false \
+    --firmware-chroot true \
+    --firmware-binary true \
+    --bootappend-live "boot=live components locales=tr_TR.UTF-8 keyboard-layouts=tr splash quiet" \
+    "${@}"

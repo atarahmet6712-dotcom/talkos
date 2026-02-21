@@ -1,0 +1,29 @@
+---
+componentName:  talkos
+windowExpands:  false
+windowSize:     800px,520px
+windowPlacement: center
+
+strings:
+    productName:         TalkOS Linux
+    shortProductName:    TalkOS
+    version:             1.0
+    shortVersion:        1.0
+    versionedName:       TalkOS 1.0 "Kelebek"
+    shortVersionedName:  TalkOS 1.0
+    bootloaderEntryName: TalkOS
+    productUrl:          https://github.com/talkos
+
+images:
+    productLogo:         "logo.png"
+    productIcon:         "logo.png"
+    productWelcome:      "welcome.png"
+
+slideshow:               "show.qml"
+slideshowAPI:            2
+
+style:
+   sidebarBackground:    "#0F172A"
+   sidebarText:          "#FFFFFF"
+   sidebarTextSelect:    "#06B6D4"
+   sidebarTextHighlight: "#06B6D4"

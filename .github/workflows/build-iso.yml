@@ -1,0 +1,49 @@
+name: TalkOS ISO Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:   # Manuel başlatma butonu
+
+jobs:
+  build-iso:
+    name: Build TalkOS ISO
+    runs-on: ubuntu-22.04  # GitHub bulut Linux sunucusu
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install live-build and dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq live-build debootstrap squashfs-tools xorriso curl gnupg
+
+      - name: Run TalkOS Build
+        run: |
+          cd talkos-build
+          sudo chmod +x ../auto/config ../auto/build ../auto/clean 2>/dev/null || true
+          sudo lb config
+          sudo lb build
+        working-directory: ${{ github.workspace }}
+
+      - name: Move ISO and rename
+        run: |
+          ISO=$(find talkos-build -name "*.hybrid.iso" 2>/dev/null | head -1)
+          if [ -z "$ISO" ]; then
+            ISO=$(find talkos-build -name "*.iso" 2>/dev/null | head -1)
+          fi
+          if [ -n "$ISO" ]; then
+            sudo mv "$ISO" TalkOS-amd64-bookworm.iso
+            echo "ISO found and renamed: TalkOS-amd64-bookworm.iso"
+          else
+            echo "ERROR: ISO not found!"
+            exit 1
+          fi
+
+      - name: Upload ISO as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TalkOS-ISO
+          path: TalkOS-amd64-bookworm.iso
+          retention-days: 7

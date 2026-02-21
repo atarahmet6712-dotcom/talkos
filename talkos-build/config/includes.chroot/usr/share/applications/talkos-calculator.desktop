@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=TalkOS Hesap Makinesi
+Comment=Basit ve şık hesap makinesi
+Exec=talkos-calculator
+Icon=accessories-calculator
+Terminal=false
+Type=Application
+Categories=Utility;Calculator;

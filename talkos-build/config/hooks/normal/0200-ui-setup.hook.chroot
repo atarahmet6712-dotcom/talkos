@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+echo "[*] Setting UI defaults (Wallpaper, Theme, Login Screen)"
+
+# 1. Set LightDM Background
+mkdir -p /etc/lightdm
+cat > /etc/lightdm/slick-greeter.conf <<EOF
+[Greeter]
+background=/usr/share/backgrounds/talkos-wallpaper.png
+draw-user-backgrounds=false
+theme-name=Materia-dark
+icon-theme-name=Papirus-Dark
+EOF
+
+# 2. XFCE Default Wallpaper
+# Instead of replacing xfce4-desktop.xml which might be complex if it doesn't exist, we link the default Debian wallpaper to TalkOS one.
+mkdir -p /usr/share/images/desktop-base
+if [ -L /usr/share/images/desktop-base/default ]; then
+    rm /usr/share/images/desktop-base/default
+fi
+ln -sf /usr/share/backgrounds/talkos-wallpaper.png /usr/share/images/desktop-base/default
+
+# Also update the alternatives system just in case
+update-alternatives --install /usr/share/images/desktop-base/desktop-background desktop-background /usr/share/backgrounds/talkos-wallpaper.png 100 || true
+update-alternatives --set desktop-background /usr/share/backgrounds/talkos-wallpaper.png || true
+
+echo "[*] UI Setup Hook completed."
