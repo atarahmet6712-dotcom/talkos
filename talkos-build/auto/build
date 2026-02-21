@@ -3,4 +3,6 @@
 # live-build build script
 set -e
 
-lb build noauto "${@}"
+echo "[*] TalkOS build starting..."
+lb build noauto "${@}" 2>&1 | tee build.log
+echo "[*] TalkOS build completed."

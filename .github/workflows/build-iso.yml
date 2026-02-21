@@ -9,86 +9,107 @@ jobs:
   build-iso:
     name: Build TalkOS ISO
     runs-on: ubuntu-22.04
-    # live-build işlemleri yoğun CPU ve I/O gerektirir.
-    
+    timeout-minutes: 120
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update -qq
-          # 'live-build' paketini repodan kurmak yerine manuel kuracağız ama bağımlılıkları eksiksiz alalım
-          sudo apt-get install -y -qq \
+          set -ex
+          sudo apt-get update
+          sudo apt-get install -y \
             debootstrap squashfs-tools xorriso curl gnupg git gettext \
-            debian-archive-keyring debian-keyring cpio
+            cpio genisoimage syslinux syslinux-common isolinux \
+            dosfstools mtools grub-pc-bin grub-efi-amd64-bin
 
-      - name: Setup Debian archive keyring for Bookworm
+      - name: Setup Debian archive keyring
         run: |
-          # Ubuntu'nun debian-archive-keyring paketi Bookworm anahtarlarını içermeyebilir.
-          # Debian'dan en güncel keyring paketini indirip kuruyoruz.
-          KEYRING_URL="http://deb.debian.org/debian/pool/main/d/debian-archive-keyring/"
-          # En güncel deb dosyasının adını bul
-          KEYRING_DEB=$(curl -sL "$KEYRING_URL" | grep -oP 'debian-archive-keyring_[^"]+_all\.deb' | sort -V | tail -1)
-          if [ -z "$KEYRING_DEB" ]; then
-            echo "::warning::Could not find latest keyring, using fallback"
-            KEYRING_DEB="debian-archive-keyring_2023.4_all.deb"
-          fi
-          echo "Downloading: ${KEYRING_URL}${KEYRING_DEB}"
-          curl -sL -o /tmp/debian-archive-keyring.deb "${KEYRING_URL}${KEYRING_DEB}"
-          sudo dpkg -i /tmp/debian-archive-keyring.deb || sudo apt-get install -f -y
-          
-          # Keyring dosyasının varlığını doğrula
-          if [ ! -f /usr/share/keyrings/debian-archive-keyring.gpg ]; then
-            echo "::error::debian-archive-keyring.gpg hala bulunamadı!"
-            ls -la /usr/share/keyrings/ || true
-            exit 1
-          fi
-          echo "✅ Debian archive keyring başarıyla kuruldu:"
+          set -ex
+          # Ubuntu'nun keyring'i Debian Bookworm için yeterli olmayabilir
+          # Debian'dan güncel keyring paketini indirip kuruyoruz
+          curl -sL -o /tmp/debian-archive-keyring.deb \
+            "http://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.4_all.deb"
+          sudo dpkg -i /tmp/debian-archive-keyring.deb || true
+          sudo apt-get install -f -y
+
+          # Doğrulama
           ls -la /usr/share/keyrings/debian-archive-keyring.gpg
+          echo "✅ Keyring kuruldu"
 
-      - name: Install latest live-build from Debian source
+      - name: Install latest live-build from Debian
         run: |
-          # Mevcut sürümü temizle ve en güncelini kur
-          sudo apt-get remove -y live-build || true
+          set -ex
+          sudo apt-get remove -y live-build 2>/dev/null || true
           git clone --depth=1 https://salsa.debian.org/live-team/live-build.git /tmp/live-build
           cd /tmp/live-build
           sudo make install
+          echo "live-build version:"
+          lb --version || echo "lb installed (no --version flag)"
 
       - name: Prepare auto scripts
         run: |
-          # Scripts klasörünün varlığını kontrol et ve izinleri ver
-          if [ -d "talkos-build/auto" ]; then
-            chmod +x talkos-build/auto/*
-          fi
+          set -ex
+          chmod +x talkos-build/auto/*
+          echo "Auto scripts:"
+          ls -la talkos-build/auto/
+
+      - name: Fix line endings
+        run: |
+          set -ex
+          # Windows CRLF -> Unix LF dönüşümü (çok önemli!)
+          sudo apt-get install -y dos2unix
+          find talkos-build -type f \( -name "*.chroot" -o -name "*.binary" -o -name "*.sh" -o -path "*/auto/*" \) -exec dos2unix {} \;
+          # auto scripts'lerin LF olduğundan emin ol
+          dos2unix talkos-build/auto/config talkos-build/auto/build talkos-build/auto/clean
+          echo "✅ Line endings fixed"
 
       - name: Run lb config
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
-          # Ubuntu üzerinde Debian derlerken debootstrap'ın Debian anahtarlarına ihtiyacı olur
-          # Ayrıca temiz bir başlangıç için 'lb clean' ekliyoruz
-          sudo lb clean --all
+          set -ex
+          sudo lb clean --all 2>/dev/null || true
           sudo lb config
+          echo "✅ lb config completed"
+          echo "=== Generated config ==="
+          cat .build/config || true
+          ls -la config/ || true
 
       - name: Run lb build
         working-directory: ${{ github.workspace }}/talkos-build
         run: |
-          # lb build komutu hata alsa bile logları görmek için 'always' yerine burada hata kontrolü yapıyoruz
-          sudo lb build
-        timeout-minutes: 90 # 60 dakika bazen yetmeyebilir, 90'a çıkardım
+          set -ex
+          sudo lb build 2>&1 | tee build.log
+        timeout-minutes: 90
+
+      - name: Debug - List build outputs
+        if: always()
+        working-directory: ${{ github.workspace }}/talkos-build
+        run: |
+          echo "=== Build directory contents ==="
+          ls -la . || true
+          echo "=== Looking for ISO files ==="
+          find . -name "*.iso" -o -name "*.hybrid.iso" 2>/dev/null || true
+          echo "=== Looking for any large files ==="
+          find . -maxdepth 1 -size +1M -exec ls -lh {} \; 2>/dev/null || true
+          echo "=== Build log tail ==="
+          tail -200 build.log 2>/dev/null || echo "No build.log found"
+          echo "=== Chroot log ==="
+          tail -100 chroot.log 2>/dev/null || echo "No chroot.log found"
 
       - name: Find and rename ISO
-        if: always()
+        if: success()
         run: |
-          # ISO dosyasını ararken talkos-build klasörünün içine bakıyoruz
+          set -ex
+          # ISO talkos-build klasöründe olacak
           ISO=$(find talkos-build -maxdepth 1 -name "*.iso" 2>/dev/null | head -1)
           if [ -n "$ISO" ]; then
             sudo mv "$ISO" TalkOS-amd64-bookworm.iso
+            ls -lh TalkOS-amd64-bookworm.iso
             echo "ISO_DONE=true" >> $GITHUB_ENV
           else
-            echo "::error::ISO dosyası üretilemedi! Loglar kontrol ediliyor..."
-            # Hata varsa son 100 satırı yazdır
-            [ -f talkos-build/build.log ] && tail -n 100 talkos-build/build.log || true
+            echo "::error::ISO dosyası bulunamadı!"
             exit 1
           fi
 
@@ -99,5 +120,14 @@ jobs:
           name: TalkOS-ISO
           path: TalkOS-amd64-bookworm.iso
           retention-days: 7
-          # Sıkıştırma yaparak yükleme hızını artırır
           compression-level: 0
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            talkos-build/build.log
+            talkos-build/chroot.log
+          retention-days: 3
